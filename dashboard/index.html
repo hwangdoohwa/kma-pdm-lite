@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px;font-family:system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>예지보전 실습 노트</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: control-room log — summary gauges on top, tabbed work panels below, one column on phones */
+:root{
+  --bg:#f3f4f2; --panel:#ffffff; --fg:#1b2024; --mut:#5f676d; --line:#dcdfdc; --soft:#e9ecea;
+  --accent:#0d6e6e; --accent-ink:#ffffff;
+  --a:#2a6fdb; --b:#c9701c; --t:#c2334d;
+  --ok:#2f7d4f; --warn:#b7791f; --bad:#c2334d;
+  --f-body:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121618; --panel:#1a1f22; --fg:#e7ebec; --mut:#9aa3a8; --line:#2c3337; --soft:#22292c;
+  --accent:#4fc1bd; --accent-ink:#0b1414; --a:#78a8ff; --b:#f0a35a; --t:#ff7189;
+  --ok:#5fc287; --warn:#e7b04f; --bad:#ff7189; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121618; --panel:#1a1f22; --fg:#e7ebec; --mut:#9aa3a8; --line:#2c3337; --soft:#22292c;
+  --accent:#4fc1bd; --accent-ink:#0b1414; --a:#78a8ff; --b:#f0a35a; --t:#ff7189;
+  --ok:#5fc287; --warn:#e7b04f; --bad:#ff7189; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.65 var(--f-body)}
+.wrap{max-width:980px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header{display:grid;gap:6px}
+.eyebrow{font:600 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(24px,4.4vw,34px);line-height:1.2;margin:0;text-wrap:balance;font-weight:700}
+h2{font-size:18px;margin:0;text-wrap:balance}
+h3{font-size:15px;margin:0}
+.sub{color:var(--mut);margin:0;max-width:65ch}
+.meta{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--mut)}
+.meta a,a{color:var(--accent)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:4px;min-width:0}
+.kpi .lab{font-size:12px;color:var(--mut);letter-spacing:.02em}
+.kpi .val{font:600 26px/1.15 var(--f-mono);font-variant-numeric:tabular-nums}
+.kpi .note{font-size:12px;color:var(--mut)}
+.bar{height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:2px 9px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.mut{color:var(--mut)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+nav.tabs button{font:inherit;font-size:14px;background:none;border:0;border-bottom:2px solid transparent;color:var(--mut);padding:10px 12px;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent);font-weight:700}
+button:focus-visible,input:focus-visible,label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:16px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;background:var(--panel);color:var(--mut);border:0;padding:6px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.group{display:grid;gap:6px}
+.group h3{display:flex;gap:8px;align-items:center;color:var(--mut);font-size:13px;font-weight:600;letter-spacing:.02em}
+.check{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;background:var(--panel)}
+.check:hover{background:var(--soft)}
+.check input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent)}
+.check .t{font-weight:500}
+.check .d{font-size:13px;color:var(--mut)}
+.check.done .t{color:var(--mut);text-decoration:line-through;text-decoration-color:var(--line)}
+.empty{color:var(--mut);font-size:14px;padding:12px;border:1px dashed var(--line);border-radius:8px}
+.chart{overflow-x:auto}
+svg{display:block;width:100%;height:auto;min-width:0}
+.grid{stroke:var(--line)} .tick{fill:var(--mut);font:11px var(--f-mono)}
+.base{fill:var(--fg);opacity:.045}
+.line{fill:none;stroke-width:2}
+.lim{stroke-width:1.4;stroke-dasharray:6 5;opacity:.85}
+.vstart{stroke-width:1.2;stroke-dasharray:2 3;opacity:.75}
+.ring{fill:none;stroke-width:2}
+.tag{fill:var(--fg);font:600 11px var(--f-body);paint-order:stroke;stroke:var(--panel);stroke-width:4px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.ctl{display:grid;gap:6px;font-size:13px;color:var(--mut)}
+.ctl output{font:600 14px var(--f-mono);color:var(--fg)}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.toggles{display:flex;flex-wrap:wrap;gap:8px}
+.toggles label{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--mut);font-weight:600;letter-spacing:.02em}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.verdict{border-left:3px solid var(--t);padding:10px 14px;background:var(--soft);border-radius:0 8px 8px 0;font-size:14px}
+.q{display:grid;gap:12px;padding:16px;border:1px solid var(--line);border-radius:10px}
+.q .qn{font:600 12px var(--f-mono);color:var(--accent);letter-spacing:.06em}
+.q p{margin:0}
+.opts{display:grid;gap:8px}
+.opt{font:inherit;text-align:left;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;display:grid;gap:2px}
+.opt:hover{background:var(--soft)}
+.opt small{color:var(--mut)}
+.opt.right{border-color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}
+.opt.wrong{border-color:var(--bad);box-shadow:inset 3px 0 0 var(--bad)}
+.opt[disabled]{cursor:default}
+.explain{font-size:14px;background:var(--soft);padding:12px 14px;border-radius:8px;display:grid;gap:6px}
+.btn{font:inherit;font-size:13px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.timeline{display:grid;gap:0;margin:0;padding:0;list-style:none}
+.timeline li{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.timeline .when{font:600 12px var(--f-mono);color:var(--accent);padding-top:2px}
+.timeline .what{display:grid;gap:2px}
+.timeline .what span{font-size:13px;color:var(--mut)}
+.url{font:600 clamp(14px,2.6vw,18px) var(--f-mono);word-break:break-all}
+.copyrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.save{font-size:12px;color:var(--mut)}
+footer{font-size:12px;color:var(--mut);display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Day5 예지보전 · 실습판 기록</div>
+    <h1>노이즈와 추세, 10분 실습 노트</h1>
+    <p class="sub">설비A·B 센서 50건(실습용 가상 데이터)으로 "한 번의 튐"과 "꾸준한 상승"을 구분하고, 그래프를 GitHub Pages로 공개한 과정을 한 화면에 모았습니다. 체크와 퀴즈 기록은 저장되어 다시 열어도 남습니다.</p>
+    <div class="meta">
+      <span class="mono">2026-10-31</span>
+      <span>hwangdoohwa</span>
+      <a href="https://hwangdoohwa.github.io/kma-pdm-lite/" target="_blank" rel="noopener">공개 그래프 열기 ↗</a>
+      <span class="save" id="saveState">저장 위치 확인 중…</span>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="요약">
+    <div class="kpi">
+      <span class="lab">진행률</span>
+      <span class="val" id="kProg">0%</span>
+      <div class="bar"><i id="kBar" style="width:0"></i></div>
+      <span class="note" id="kProgNote">0 / 0 항목</span>
+    </div>
+    <div class="kpi">
+      <span class="lab">퀴즈 정답률</span>
+      <span class="val" id="kQuiz">0%</span>
+      <span class="note" id="kQuizNote">시도 0회</span>
+    </div>
+    <div class="kpi">
+      <span class="lab">설비B 온도 추세 시작</span>
+      <span class="val" id="kTrend">13:00</span>
+      <span class="note" id="kTrendNote">상한 57.0 ℃ · 3번 연속</span>
+    </div>
+    <div class="kpi">
+      <span class="lab">공개 상태</span>
+      <span class="val" style="font-size:20px"><span class="pill ok">built</span></span>
+      <span class="note">Pages 200 응답 확인</span>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist" aria-label="섹션">
+    <button role="tab" id="tab-steps" data-tab="steps">진행 체크</button>
+    <button role="tab" id="tab-chart" data-tab="chart">그래프</button>
+    <button role="tab" id="tab-quiz" data-tab="quiz">퀴즈</button>
+    <button role="tab" id="tab-results" data-tab="results">결과물</button>
+  </nav>
+
+  <!-- 진행 체크 -->
+  <section class="panel" data-panel="steps" role="tabpanel" aria-labelledby="tab-steps">
+    <div class="row">
+      <h2>단계별 진행</h2>
+      <div class="seg" role="group" aria-label="필터">
+        <button data-filter="all" aria-pressed="true">전체 <span class="mono" id="cAll"></span></button>
+        <button data-filter="todo" aria-pressed="false">남은 <span class="mono" id="cTodo"></span></button>
+        <button data-filter="done" aria-pressed="false">완료 <span class="mono" id="cDone"></span></button>
+      </div>
+    </div>
+    <div id="steps" class="group" style="gap:18px"></div>
+  </section>
+
+  <!-- 그래프 -->
+  <section class="panel" data-panel="chart" role="tabpanel" aria-labelledby="tab-chart" hidden>
+    <div class="row">
+      <h2>노이즈 vs 추세</h2>
+      <button class="btn" id="resetCtl">기본값(3σ · 3번)으로</button>
+    </div>
+    <div class="controls">
+      <label class="ctl" for="kSig">기준선 상한 = 평균 + <output id="kSigOut">3.0</output> σ
+        <input type="range" id="kSig" min="1" max="5" step="0.5" value="3">
+      </label>
+      <label class="ctl" for="nRun">추세 판정: 상한을 <output id="nRunOut">3</output>번 연속 넘으면
+        <input type="range" id="nRun" min="2" max="6" step="1" value="3">
+      </label>
+    </div>
+    <div class="toggles" id="toggles"></div>
+    <div class="chart"><svg id="svg" viewBox="0 0 760 420" role="img" aria-label="설비A·B 진동과 설비B 온도 선 그래프"></svg></div>
+    <div class="tbl"><table>
+      <thead><tr><th>항목</th><th>기준선 상한</th><th>추세 시작</th><th>노이즈</th></tr></thead>
+      <tbody id="sumBody"></tbody>
+    </table></div>
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <!-- 퀴즈 -->
+  <section class="panel" data-panel="quiz" role="tabpanel" aria-labelledby="tab-quiz" hidden>
+    <div class="row">
+      <h2>판단 퀴즈</h2>
+      <button class="btn" id="resetQuiz">기록 지우기</button>
+    </div>
+    <div id="quizList" class="group" style="gap:14px"></div>
+    <div>
+      <h3 style="margin-bottom:8px">시도 기록</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>언제</th><th>문항</th><th>고른 답</th><th>결과</th></tr></thead>
+        <tbody id="attemptBody"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- 결과물 -->
+  <section class="panel" data-panel="results" role="tabpanel" aria-labelledby="tab-results" hidden>
+    <h2>최종 결과물</h2>
+    <div class="group">
+      <span class="lab" style="font-size:12px;color:var(--mut)">공개 주소</span>
+      <div class="copyrow">
+        <span class="url" id="pagesUrl">https://hwangdoohwa.github.io/kma-pdm-lite/</span>
+        <button class="btn primary" data-copy="pagesUrl">복사</button>
+      </div>
+      <span class="save" id="copyMsg"></span>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>블록</th><th>만든 것</th><th>위치</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr><td>0 준비</td><td>작업 폴더 · 데이터 · 환경 점검표</td><td class="num">~/kma-pdm-lite/env_check.txt</td><td><span class="pill ok">OK</span></td></tr>
+        <tr><td>1 노이즈 vs 추세</td><td>그래프 한 장</td><td class="num">~/kma-pdm-lite/index.html</td><td><span class="pill ok">완성</span></td></tr>
+        <tr><td>2 공개</td><td>공개 저장소 + Pages</td><td class="num"><a href="https://github.com/hwangdoohwa/kma-pdm-lite" target="_blank" rel="noopener">hwangdoohwa/kma-pdm-lite</a></td><td><span class="pill ok">PUBLIC · built</span></td></tr>
+      </tbody>
+    </table></div>
+    <div>
+      <h3 style="margin-bottom:4px">진행 순서</h3>
+      <ol class="timeline">
+        <li><span class="when">Block 0</span><div class="what">데이터 확인<span>50행(설비A 25 · 설비B 25), 열 6개, 08:00~16:00 20분 간격. Python 3.15.1 · git 2.56 OK</span></div></li>
+        <li><span class="when">Block 1</span><div class="what">그래프와 판정<span>처음 12점 평균 + 3σ를 상한으로, 3번 연속 초과를 추세로. 설비B 온도 13:00 · 진동 15:00 추세, 설비A 12:40 노이즈</span></div></li>
+        <li><span class="when">퀴즈</span><div class="what">정비 우선 설비<span>수업 중 1차 시도는 설비A(최고값 기준)로 오답. 정답은 설비B(추세 기준)</span></div></li>
+        <li><span class="when">Block 2</span><div class="what">공개<span>env_check.txt는 .gitignore로 제외, 공개 저장소 푸시, Pages(main, /) 켜고 built 확인</span></div></li>
+      </ol>
+    </div>
+    <div class="group">
+      <span class="lab" style="font-size:12px;color:var(--mut)">짝에게 보낼 설치 한 줄</span>
+      <div class="copyrow">
+        <code class="mono" id="installCmd" style="font-size:13px;word-break:break-all">npx skills add hwangdoohwa/learn-pdm-lite-hdh --agent claude-code --global --yes</code>
+        <button class="btn" data-copy="installCmd">복사</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>실습용 가상 데이터입니다. 실제 설비 데이터가 아닙니다.</span>
+    <span>원본 강의 저장소: <a href="https://github.com/keerhee/kma-auto-genai-3-1" target="_blank" rel="noopener">keerhee/kma-auto-genai-3-1</a></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- data (실습용 가상 데이터, Day5_설비센서_50건_가상.csv) ---------- */
+var TIMES=[];for(var m=0;m<25;m++){var mm=8*60+m*20;TIMES.push(String(Math.floor(mm/60)).padStart(2,"0")+":"+String(mm%60).padStart(2,"0"));}
+var SERIES=[
+  {key:"a",name:"설비A 진동",unit:"mm/s",axis:"L",color:"var(--a)",v:[0.99,1.05,0.92,0.93,1.05,1.0,0.93,0.96,0.93,0.96,1.06,1.0,1.1,0.9,3.5,1.0,1.04,0.94,1.06,1.06,1.02,1.03,0.99,0.93,1.03]},
+  {key:"b",name:"설비B 진동",unit:"mm/s",axis:"L",color:"var(--b)",v:[0.94,1.05,1.03,1.03,1.05,1.0,1.05,1.01,1.01,0.96,1.02,1.01,1.04,1.04,1.06,1.05,1.08,1.1,1.12,1.09,1.0,1.3,1.7,2.2,2.9]},
+  {key:"t",name:"설비B 온도",unit:"℃",axis:"R",color:"var(--t)",v:[55.6,54.6,55.5,55.8,55.8,55.3,55.7,54.8,54.1,55.7,55.4,55.8,54.3,55.4,56.7,58.2,57.8,59.3,60.9,60.7,61.4,63.3,63.3,64.0,65.1]}
+];
+
+/* ---------- checklist ---------- */
+var GROUPS=[
+  {id:"b0",title:"Block 0 · 준비",items:[
+    {id:"b0-1",t:"작업 폴더와 데이터 복사",d:"~/kma-pdm-lite/data 에 csv 복사, 원본은 그대로"},
+    {id:"b0-2",t:"Python · git 확인",d:"Python 3.15.1, git 2.56.0"},
+    {id:"b0-3",t:"데이터 구조 확인",d:"50행 · 열 6개 · 단위 mm/s, ℃, bar"},
+    {id:"b0-4",t:"env_check.txt 작성",d:"모든 항목 OK, 조치 필요 없음"}]},
+  {id:"b1",title:"Block 1 · 노이즈 vs 추세",items:[
+    {id:"b1-1",t:"선 그래프 한 장 그리기",d:"설비A·B 진동(왼쪽 축) + 설비B 온도(오른쪽 축)"},
+    {id:"b1-2",t:"기준선 상한 점선 3개",d:"처음 12점 평균 + 3σ"},
+    {id:"b1-3",t:"추세 시작 · 노이즈 표시",d:"설비B 온도 13:00, 진동 15:00 / 설비A 12:40 노이즈"},
+    {id:"b1-4",t:"판단 퀴즈 풀기",d:"정비 계획을 먼저 잡을 설비 고르기"}]},
+  {id:"b2",title:"Block 2 · 공개",items:[
+    {id:"b2-1",t:"올릴 파일 점검 · .gitignore",d:"개인정보 없음, env_check.txt 제외"},
+    {id:"b2-2",t:"GitHub 연결 확인",d:"이미 로그인되어 일회용 코드 불필요"},
+    {id:"b2-3",t:"공개 저장소 푸시",d:"hwangdoohwa/kma-pdm-lite (PUBLIC)"},
+    {id:"b2-4",t:"Pages 켜고 built 확인",d:"https://hwangdoohwa.github.io/kma-pdm-lite/"}]},
+  {id:"hw",title:"과제 · 수업 뒤에 할 일",items:[
+    {id:"hw-1",t:"짝에게 공유",d:"Pages 주소와 설치 한 줄 보내기 · 제출물: 보낸 메시지 캡처"},
+    {id:"hw-2",t:"점검표 받기",d:"블록 3개 · 판단형 퀴즈 · 13:00 · 헷갈린 문장을 예/아니오로"},
+    {id:"hw-3",t:"내 강의 하나 더",d:"/course-forge 로 새 learn- 저장소 만들기"}]}
+];
+var DEFAULT_DONE=["b0-1","b0-2","b0-3","b0-4","b1-1","b1-2","b1-3","b1-4","b2-1","b2-2","b2-3","b2-4"];
+
+/* ---------- quiz ---------- */
+var QUIZ=[
+  {id:"q1",tag:"QUIZ 1 · 수업 문항",
+   q:"정비 계획 회의. 설비A(프레스 메인모터)는 진동이 12:40에 한 번 3.5 mm/s로 튀고 20분 뒤 1.0으로 돌아왔다. 설비B(용접로봇 감속기)는 온도가 13:00부터 기준선 상한(57.0℃)을 계속 넘으며 65.1℃까지 올랐다. 정비 계획을 먼저 잡을 설비는?",
+   opts:[{t:"설비A — 가장 높은 한 점(3.5)이 나왔으니 위험하다",s:"최고값 기준"},{t:"설비B — 상한을 연속으로 넘으며 오르는 흐름이 정비 신호다",s:"추세 기준"},{t:"둘 다 아니다 — 아직 고장이 나지 않았으니 지켜본다",s:"사후 대응"}],
+   ans:1,
+   why:["설비B는 13:00부터 상한을 한 번도 내려오지 않고 넘으며 올랐습니다. 그 시작점이 정비 신호입니다.","1번은 원본 모범답안의 감점 포인트입니다. 3.5는 20분 뒤 1.0으로 돌아온 노이즈입니다.","3번은 고장 뒤에 움직이는 사후 정비라 예지보전의 목적과 반대입니다."]},
+  {id:"q2",tag:"복습 · 추가 문항",
+   q:"설비B 진동은 14:00에 1.12 mm/s로 상한(1.12)을 살짝 넘었다가 14:20에 1.09로 내려왔다. 이 점은 어떻게 보나?",
+   opts:[{t:"추세 시작 — 처음 상한을 넘은 시각이니까",s:"첫 초과 기준"},{t:"노이즈 — 3번 연속 조건을 채우지 못했다",s:"연속 조건 기준"},{t:"측정 오류 — 데이터에서 지운다",s:"데이터 삭제"}],
+   ans:1,
+   why:["추세는 상한을 3번 연속 넘을 때부터 봅니다. 14:00은 한 번 넘고 돌아왔으니 노이즈입니다.","설비B 진동의 추세 시작은 15:00(1.3→1.7→2.2→2.9)입니다.","노이즈라고 데이터를 지우면 나중에 원인을 확인할 근거가 사라집니다. 표시만 해 둡니다."]},
+  {id:"q3",tag:"복습 · 추가 문항",
+   q:"기준선 상한을 '처음 12점(08:00~11:40)'으로 계산한 이유로 가장 맞는 것은?",
+   opts:[{t:"그 구간이 정상 운전 구간이라 '평소 수준'을 대표하기 때문",s:"정상 구간 기준"},{t:"데이터 25점 중 절반쯤이라 계산이 편해서",s:"편의"},{t:"전체 25점을 쓰면 상한이 너무 낮아져서",s:"전체 평균"}],
+   ans:0,
+   why:["상한은 '평소와 다르다'를 판단하는 잣대라서, 이상이 섞이지 않은 정상 운전 구간으로 잡습니다.","전체 25점을 쓰면 오히려 상승 구간이 섞여 평균과 표준편차가 커지고 상한이 높아집니다. 그러면 추세를 늦게 잡습니다.","12라는 숫자 자체보다 '정상 구간'이라는 조건이 핵심입니다."]}
+];
+var SEED_ATTEMPTS=[{q:"q1",c:0,at:"2026-10-31 수업 중",seed:true}];
+
+/* ---------- state & storage ---------- */
+var state={checks:{},attempts:[],kSig:3,nRun:3};
+DEFAULT_DONE.forEach(function(id){state.checks[id]=true;});
+state.attempts=SEED_ATTEMPTS.slice();
+var ui={tab:"steps",filter:"all",hide:{}};
+var LS="pdm-lab-log-v1";
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k)||"null");}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+var saved=lsGet(LS); if(saved&&saved.checks){state=Object.assign(state,saved);}
+var u0=lsGet(LS+"-ui"); if(u0){ui=Object.assign(ui,u0);}
+if(location.hash){var h=location.hash.slice(1);if(["steps","chart","quiz","results"].indexOf(h)>=0)ui.tab=h;}
+
+var docRef=null,writing=false,pending=false,timer=null;
+var saveEl=document.getElementById("saveState");
+function setSave(t){saveEl.textContent=t;}
+setSave("이 브라우저에 저장");
+function persist(){
+  lsSet(LS,state);
+  if(!docRef)return;
+  clearTimeout(timer);timer=setTimeout(flush,600);
+}
+function flush(){
+  if(writing){pending=true;return;}
+  writing=true;setSave("저장 중…");
+  docRef.set(JSON.parse(JSON.stringify(state))).then(function(){setSave("내 계정에 저장됨");})
+  .catch(function(e){setSave(e&&e.code==="invalid_argument"?"이 브라우저에 저장 (계정 저장 권한 없음)":"이 브라우저에 저장 (계정 저장 실패)");if(e&&e.code==="invalid_argument")docRef=null;})
+  .then(function(){writing=false;if(pending){pending=false;flush();}});
+}
+(async function initDb(){
+  try{
+    if(!window.claude||!window.claude.use)return;
+    var r=await Promise.all([claude.use("db"),claude.use("user")]);
+    var db=r[0],user=r[1]; if(!db||!user)return;
+    var id=await user.id(); if(!id)return;
+    docRef=db.doc("data/users/"+id+"/progress");
+    var to=setTimeout(function(){setSave("계정 저장소 응답 대기 중 · 이 브라우저에 저장");},10000);
+    var snap=await docRef.get(); clearTimeout(to);
+    if(snap.exists){var d=snap.data();state=Object.assign({},state,JSON.parse(JSON.stringify(d)));lsSet(LS,state);renderAll();}
+    setSave("내 계정에 저장됨");
+  }catch(e){docRef=null;setSave("이 브라우저에 저장");}
+})();
+
+/* ---------- tabs ---------- */
+var tabBtns=[].slice.call(document.querySelectorAll("[data-tab]"));
+function showTab(t){
+  ui.tab=t;lsSet(LS+"-ui",ui);
+  tabBtns.forEach(function(b){b.setAttribute("aria-selected",String(b.dataset.tab===t));});
+  document.querySelectorAll("[data-panel]").forEach(function(p){p.hidden=p.dataset.panel!==t;});
+}
+tabBtns.forEach(function(b){b.addEventListener("click",function(){showTab(b.dataset.tab);});});
+
+/* ---------- checklist render ---------- */
+var allItems=[];GROUPS.forEach(function(g){g.items.forEach(function(i){allItems.push(i);});});
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function renderSteps(){
+  var box=document.getElementById("steps");box.innerHTML="";
+  var any=false;
+  GROUPS.forEach(function(g){
+    var items=g.items.filter(function(i){var d=!!state.checks[i.id];return ui.filter==="all"||(ui.filter==="done"?d:!d);});
+    if(!items.length)return; any=true;
+    var nd=g.items.filter(function(i){return state.checks[i.id];}).length;
+    var wrap=document.createElement("div");wrap.className="group";
+    var cls=nd===g.items.length?"ok":(nd?"warn":"mut");
+    wrap.innerHTML='<h3>'+esc(g.title)+' <span class="pill '+cls+'">'+nd+' / '+g.items.length+'</span></h3>';
+    items.forEach(function(i){
+      var d=!!state.checks[i.id];
+      var lab=document.createElement("label");lab.className="check"+(d?" done":"");lab.setAttribute("for","c-"+i.id);
+      lab.innerHTML='<input type="checkbox" id="c-'+i.id+'"'+(d?" checked":"")+'><span><span class="t">'+esc(i.t)+'</span><br><span class="d">'+esc(i.d)+'</span></span><span class="pill '+(d?"ok":"mut")+'">'+(d?"완료":"남음")+'</span>';
+      lab.querySelector("input").addEventListener("change",function(e){state.checks[i.id]=e.target.checked;persist();renderSteps();renderKpis();});
+      wrap.appendChild(lab);
+    });
+    box.appendChild(wrap);
+  });
+  if(!any){box.innerHTML='<div class="empty">'+(ui.filter==="todo"?"남은 항목이 없습니다. 모두 끝냈습니다.":"아직 완료한 항목이 없습니다. 체크하면 여기에 모입니다.")+'</div>';}
+  var nDone=allItems.filter(function(i){return state.checks[i.id];}).length;
+  document.getElementById("cAll").textContent=allItems.length;
+  document.getElementById("cDone").textContent=nDone;
+  document.getElementById("cTodo").textContent=allItems.length-nDone;
+}
+document.querySelectorAll("[data-filter]").forEach(function(b){
+  b.addEventListener("click",function(){ui.filter=b.dataset.filter;lsSet(LS+"-ui",ui);
+    document.querySelectorAll("[data-filter]").forEach(function(x){x.setAttribute("aria-pressed",String(x===b));});renderSteps();});
+});
+
+/* ---------- analysis ---------- */
+function analyze(v,k,n){
+  var b=v.slice(0,12),mean=b.reduce(function(a,x){return a+x;},0)/12;
+  var sd=Math.sqrt(b.reduce(function(a,x){return a+(x-mean)*(x-mean);},0)/11);
+  var lim=mean+k*sd, over=v.map(function(x){return x>lim;});
+  var start=null;
+  for(var i=0;i<=v.length-n;i++){var ok=true;for(var j=i;j<i+n;j++){if(!over[j]){ok=false;break;}}if(ok){start=i;break;}}
+  var trend={};if(start!==null){for(var t=start;t<v.length&&over[t];t++)trend[t]=true;}
+  var noise=[];over.forEach(function(o,i){if(o&&!trend[i])noise.push(i);});
+  return {lim:lim,start:start,noise:noise};
+}
+
+/* ---------- chart ---------- */
+var W=760,H=420,ml=52,mr=56,mt=24,mb=52,pw=W-ml-mr,ph=H-mt-mb;
+var LR={L:[0,4],R:[50,70]};
+function X(i){return ml+pw*i/(TIMES.length-1);}
+function Y(v,ax){var r=LR[ax];return mt+ph*(1-(v-r[0])/(r[1]-r[0]));}
+function renderToggles(){
+  var box=document.getElementById("toggles");box.innerHTML="";
+  SERIES.forEach(function(s){
+    var l=document.createElement("label");l.setAttribute("for","s-"+s.key);
+    l.innerHTML='<input type="checkbox" id="s-'+s.key+'"'+(ui.hide[s.key]?"":" checked")+'><span class="sw" style="background:'+s.color+'"></span>'+esc(s.name)+' <span style="color:var(--mut)">('+(s.axis==="L"?"왼쪽":"오른쪽")+' 축)</span>';
+    l.querySelector("input").addEventListener("change",function(e){ui.hide[s.key]=!e.target.checked;lsSet(LS+"-ui",ui);renderChart();});
+    box.appendChild(l);
+  });
+}
+function renderChart(){
+  var k=+state.kSig,n=+state.nRun,g=[];
+  document.getElementById("kSig").value=k;document.getElementById("nRun").value=n;
+  document.getElementById("kSigOut").textContent=k.toFixed(1);document.getElementById("nRunOut").textContent=n;
+  for(var q=0;q<5;q++){var yy=Y(q,"L");
+    g.push('<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+yy+'" y2="'+yy+'" class="grid"/>');
+    g.push('<text x="'+(ml-8)+'" y="'+(yy+4)+'" class="tick" text-anchor="end">'+q+'</text>');
+    g.push('<text x="'+(W-mr+8)+'" y="'+(Y(50+5*q,"R")+4)+'" class="tick">'+(50+5*q)+'</text>');}
+  TIMES.forEach(function(t,i){if(i%3===0)g.push('<text x="'+X(i)+'" y="'+(H-mb+18)+'" class="tick" text-anchor="middle">'+t+'</text>');});
+  g.push('<text x="'+(ml-8)+'" y="'+(mt-8)+'" class="tick" text-anchor="end">mm/s</text>');
+  g.push('<text x="'+(W-mr+8)+'" y="'+(mt-8)+'" class="tick">℃</text>');
+  g.push('<rect x="'+X(0)+'" y="'+mt+'" width="'+(X(11)-X(0))+'" height="'+ph+'" class="base"/>');
+  g.push('<text x="'+((X(0)+X(11))/2)+'" y="'+(H-mb-8)+'" class="tick" text-anchor="middle">기준 구간 (처음 12점)</text>');
+  var rows=[];
+  SERIES.forEach(function(s){
+    var r=analyze(s.v,k,n);s.r=r;
+    rows.push('<tr><td><span class="sw" style="background:'+s.color+';margin-right:6px"></span>'+esc(s.name)+'</td><td class="num">'+r.lim.toFixed(2)+' '+s.unit+'</td><td class="num">'+(r.start!==null?'<b>'+TIMES[r.start]+'</b>':'없음')+'</td><td class="num">'+(r.noise.map(function(i){return TIMES[i];}).join(", ")||'없음')+'</td></tr>');
+    if(ui.hide[s.key])return;
+    var ax=s.axis,c=s.color,yl=Y(Math.min(s.r.lim,LR[ax][1]),ax);
+    g.push('<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+yl+'" y2="'+yl+'" stroke="'+c+'" class="lim"/>');
+    g.push('<polyline points="'+s.v.map(function(v,i){return X(i)+","+Y(v,ax);}).join(" ")+'" stroke="'+c+'" class="line"/>');
+    s.v.forEach(function(v,i){g.push('<circle cx="'+X(i)+'" cy="'+Y(v,ax)+'" r="2.5" fill="'+c+'"><title>'+s.name+' '+TIMES[i]+' · '+v+' '+s.unit+'</title></circle>');});
+    r.noise.forEach(function(i){var cx=X(i),cy=Y(s.v[i],ax);
+      g.push('<circle cx="'+cx+'" cy="'+cy+'" r="8" class="ring" stroke="'+c+'"/>');
+      g.push('<text x="'+cx+'" y="'+(cy-13)+'" class="tag" text-anchor="middle">노이즈 '+TIMES[i]+'</text>');});
+    if(r.start!==null){var i0=r.start,cx0=X(i0),cy0=Y(s.v[i0],ax);
+      g.push('<line x1="'+cx0+'" x2="'+cx0+'" y1="'+mt+'" y2="'+(H-mb)+'" stroke="'+c+'" class="vstart"/>');
+      g.push('<circle cx="'+cx0+'" cy="'+cy0+'" r="6" fill="'+c+'" stroke="var(--panel)" stroke-width="2"/>');
+      g.push('<text x="'+(cx0-8)+'" y="'+(cy0-10)+'" class="tag" text-anchor="end">추세 시작 '+TIMES[i0]+'</text>');}
+  });
+  document.getElementById("svg").innerHTML=g.join("");
+  document.getElementById("sumBody").innerHTML=rows.join("");
+  var A=SERIES[0].r,B=SERIES[1].r,T=SERIES[2].r,parts=[];
+  if(T.start!==null||B.start!==null){parts.push("<b>설비B</b>는 "+[T.start!==null?"온도가 "+TIMES[T.start]:null,B.start!==null?"진동이 "+TIMES[B.start]:null].filter(Boolean).join(", ")+"부터 상한을 연속으로 넘으며 오릅니다. 정비 신호입니다.");}
+  else parts.push("이 조건에서는 설비B에 추세가 잡히지 않습니다. 상한이 너무 높거나 연속 조건이 너무 깁니다.");
+  if(A.start!==null)parts.push("이 조건에서는 설비A도 추세로 잡힙니다. 상한이 너무 낮아 노이즈를 추세로 착각하는 상태입니다.");
+  else if(A.noise.length)parts.push("<b>설비A</b>의 "+A.noise.map(function(i){return TIMES[i];}).join(", ")+"는 한 번 튀고 돌아온 노이즈입니다.");
+  if(k!==3||n!==3)parts.push('<span style="color:var(--mut)">(수업 기준은 3σ · 3번 연속입니다.)</span>');
+  document.getElementById("verdict").innerHTML="<b>판단:</b> "+parts.join(" ");
+  renderKpis();
+}
+document.getElementById("kSig").addEventListener("input",function(e){state.kSig=+e.target.value;renderChart();});
+document.getElementById("nRun").addEventListener("input",function(e){state.nRun=+e.target.value;renderChart();});
+document.getElementById("kSig").addEventListener("change",persist);
+document.getElementById("nRun").addEventListener("change",persist);
+document.getElementById("resetCtl").addEventListener("click",function(){state.kSig=3;state.nRun=3;persist();renderChart();});
+
+/* ---------- quiz ---------- */
+var open={};
+function renderQuiz(){
+  var box=document.getElementById("quizList");box.innerHTML="";
+  QUIZ.forEach(function(Q,qi){
+    var last=null;state.attempts.forEach(function(a){if(a.q===Q.id)last=a;});
+    var showAns=open[Q.id]!==undefined;
+    var picked=showAns?open[Q.id]:null;
+    var el=document.createElement("div");el.className="q";
+    var tries=state.attempts.filter(function(a){return a.q===Q.id;});
+    var status=tries.length?(tries[tries.length-1].c===Q.ans?'<span class="pill ok">최근 정답</span>':'<span class="pill bad">최근 오답</span>'):'<span class="pill mut">미응시</span>';
+    el.innerHTML='<div class="row"><span class="qn">'+esc(Q.tag)+'</span>'+status+'</div><p>'+esc(Q.q)+'</p>';
+    var opts=document.createElement("div");opts.className="opts";
+    Q.opts.forEach(function(o,oi){
+      var b=document.createElement("button");b.className="opt";b.type="button";
+      b.innerHTML='<span>'+(oi+1)+'. '+esc(o.t)+'</span><small>'+esc(o.s)+'</small>';
+      if(showAns){b.disabled=true;if(oi===Q.ans)b.classList.add("right");else if(oi===picked)b.classList.add("wrong");}
+      b.addEventListener("click",function(){
+        open[Q.id]=oi;
+        var d=new Date(),p=function(x){return String(x).padStart(2,"0");};
+        state.attempts.push({q:Q.id,c:oi,at:d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())});
+        if(state.attempts.length>200)state.attempts=state.attempts.slice(-200);
+        persist();renderQuiz();renderKpis();
+      });
+      opts.appendChild(b);
+    });
+    el.appendChild(opts);
+    if(showAns){
+      var ex=document.createElement("div");ex.className="explain";
+      ex.innerHTML='<b>'+(picked===Q.ans?"정답입니다.":"오답입니다. 정답은 "+(Q.ans+1)+"번입니다.")+'</b>'+Q.why.map(function(w){return '<span>'+esc(w)+'</span>';}).join("");
+      var again=document.createElement("button");again.className="btn";again.type="button";again.textContent="다시 풀기";again.style.justifySelf="start";
+      again.addEventListener("click",function(){delete open[Q.id];renderQuiz();});
+      ex.appendChild(again);el.appendChild(ex);
+    }
+    box.appendChild(el);
+  });
+  var tb=document.getElementById("attemptBody");
+  if(!state.attempts.length){tb.innerHTML='<tr><td colspan="4" style="color:var(--mut)">아직 기록이 없습니다. 위 문항에서 보기를 고르면 여기에 쌓입니다.</td></tr>';return;}
+  tb.innerHTML=state.attempts.slice().reverse().map(function(a){
+    var Q=QUIZ.filter(function(x){return x.id===a.q;})[0];if(!Q)return"";
+    var ok=a.c===Q.ans;
+    return '<tr><td class="num">'+esc(a.at)+'</td><td>'+esc(Q.tag.split(" · ")[0]==="QUIZ 1"?"Quiz 1":"복습 "+Q.id.slice(1))+'</td><td>'+(a.c+1)+'. '+esc(Q.opts[a.c].s)+'</td><td><span class="pill '+(ok?"ok":"bad")+'">'+(ok?"정답":"오답")+'</span></td></tr>';
+  }).join("");
+}
+document.getElementById("resetQuiz").addEventListener("click",function(){
+  var b=this;
+  if(b.dataset.armed){state.attempts=SEED_ATTEMPTS.slice();open={};delete b.dataset.armed;b.textContent="기록 지우기";persist();renderQuiz();renderKpis();return;}
+  b.dataset.armed="1";b.textContent="한 번 더 누르면 지웁니다";
+  setTimeout(function(){if(b.dataset.armed){delete b.dataset.armed;b.textContent="기록 지우기";}},4000);
+});
+
+/* ---------- KPIs ---------- */
+function renderKpis(){
+  var nDone=allItems.filter(function(i){return state.checks[i.id];}).length,pct=Math.round(nDone/allItems.length*100);
+  document.getElementById("kProg").textContent=pct+"%";
+  document.getElementById("kBar").style.width=pct+"%";
+  document.getElementById("kProgNote").textContent=nDone+" / "+allItems.length+" 항목 · 과제 "+GROUPS[3].items.filter(function(i){return state.checks[i.id];}).length+"/3";
+  var n=state.attempts.length,c=state.attempts.filter(function(a){var Q=QUIZ.filter(function(x){return x.id===a.q;})[0];return Q&&a.c===Q.ans;}).length;
+  document.getElementById("kQuiz").textContent=n?Math.round(c/n*100)+"%":"–";
+  document.getElementById("kQuizNote").textContent="시도 "+n+"회 · 정답 "+c+"회";
+  var T=SERIES[2].r||analyze(SERIES[2].v,state.kSig,state.nRun);
+  document.getElementById("kTrend").textContent=T.start!==null?TIMES[T.start]:"없음";
+  document.getElementById("kTrendNote").textContent="상한 "+T.lim.toFixed(1)+" ℃ · "+state.nRun+"번 연속"+((+state.kSig!==3)?" · "+(+state.kSig).toFixed(1)+"σ":"");
+}
+
+/* ---------- copy ---------- */
+document.querySelectorAll("[data-copy]").forEach(function(b){
+  b.addEventListener("click",function(){
+    var el=document.getElementById(b.dataset.copy),txt=el.textContent,msg=document.getElementById("copyMsg");
+    function sel(){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);msg.textContent="복사가 막혀 있어 글자를 선택해 두었습니다. Ctrl+C로 복사하세요.";}
+    try{navigator.clipboard.writeText(txt).then(function(){msg.textContent="복사했습니다.";b.textContent="복사됨";setTimeout(function(){b.textContent="복사";},1500);},sel);}catch(e){sel();}
+  });
+});
+
+function renderAll(){renderToggles();renderSteps();renderChart();renderQuiz();renderKpis();
+  document.querySelectorAll("[data-filter]").forEach(function(x){x.setAttribute("aria-pressed",String(x.dataset.filter===ui.filter));});}
+renderAll();showTab(ui.tab);
+})();
+</script>
+
+</body>
+</html>
